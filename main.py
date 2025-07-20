@@ -65,24 +65,36 @@ if __name__ == "__main__":
             schema_run_python_file
         ]
     )
-    generated_response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents=messages,
-        config=types.GenerateContentConfig(
-            tools=[available_functions], system_instruction=system_prompt
-        )
-    )
 
-    if generated_response.function_calls:
-        for function in generated_response.function_calls:
-            function_response = call_function(function, verbose)
-            if not function_response.parts[0].function_response.response:
-                raise Exception("Fatal error: no response")
-            if verbose:
-                print(f"-> {function_response.parts[0].function_response.response}")
-    else: print(generated_response.text)
+    try:
+        for _ in range(20):
+            generated_response = client.models.generate_content(
+                model="gemini-2.0-flash-001",
+                contents=messages,
+                config=types.GenerateContentConfig(
+                    tools=[available_functions], system_instruction=system_prompt
+                )
+            )
 
-    if verbose:
-        print(f"User prompt: {prompt}")
-        print(f"Prompt tokens: {generated_response.usage_metadata.prompt_token_count}")
-        print(f"Response tokens: {generated_response.usage_metadata.candidates_token_count}")
+
+            for response_variant in generated_response.candidates:
+                messages.append(response_variant.content)
+
+            if generated_response.function_calls:
+                for function in generated_response.function_calls:
+                    function_response = call_function(function, verbose)
+                    if not function_response.parts[0].function_response.response:
+                        raise Exception("Fatal error: no response")
+                    if verbose:
+                        print(f"-> {function_response.parts[0].function_response.response}")
+                    messages.append(function_response)
+            else:
+                print(f"Final response:\n{generated_response.text}")
+                break
+
+        if verbose:
+            print(f"User prompt: {prompt}")
+            print(f"Prompt tokens: {generated_response.usage_metadata.prompt_token_count}")
+            print(f"Response tokens: {generated_response.usage_metadata.candidates_token_count}")
+    except Exception as e:
+        print(f"{e}")
